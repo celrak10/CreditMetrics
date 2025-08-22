@@ -9,8 +9,8 @@ library(tidyr)
 library(lubridate)
 library(stringr)
 library(ggplot2)
-library(pROC)       # For making AUC
-library(ranger)     # My favorit Random Forest package
+library(pROC) # For making AUC
+library(ranger) # My favorit Random Forest package
 library(writexl)
 library(pROC)
 library(PRROC)
@@ -141,7 +141,7 @@ cat_vars <- drop_if_one_level(train, c("SIZE","Program","Cred_Type","Sector","NP
 
 
 
-# ─────────────────────────────────────────────────────────────
+
 # A) Inspect factor levels in the training slice
 # ─────────────────────────────────────────────────────────────
 
@@ -267,11 +267,7 @@ cat(sprintf("Logit AUC — Train: %.3f | Test: %.3f\n", auc_train, auc_test))
 ###############################################################################
 # 5B) Model 2: Random Forest
 ################################################################################
-      
-      ################################################################################
-      # 5B) Model 2: Random Forest (ranger)
-      ################################################################################
-      
+    
       # Asegurar que la etiqueta sea factor 0/1 para ranger con probability=TRUE
       train <- train %>% mutate(y_next = factor(y_next, levels = c(0,1)))
       test  <- test  %>% mutate(y_next = factor(y_next, levels = c(0,1)))
@@ -343,7 +339,7 @@ cat(sprintf("Logit AUC — Train: %.3f | Test: %.3f\n", auc_train, auc_test))
         labs(title="Variable Importance — Random Forest", x=NULL, y="Permutation Importance") +
         theme_minimal()
       
-      # ─────────────────────────────────────────────────────────────
+     
       # Evaluación mensual con RF (AUC por mes)
       # ─────────────────────────────────────────────────────────────
       monthly_results_rf <- df %>%
@@ -389,7 +385,7 @@ cat(sprintf("Logit AUC — Train: %.3f | Test: %.3f\n", auc_train, auc_test))
         scale_x_date(date_labels="%Y-%m", date_breaks="2 months") +
         theme(axis.text.x = element_text(angle=90, hjust=1))
       
-      # ─────────────────────────────────────────────────────────────
+      
       # Guardar PD por cliente-mes (RF mensual)
       # ─────────────────────────────────────────────────────────────
       pd_results_rf <- df %>%
@@ -989,9 +985,9 @@ cat(sprintf("Logit AUC — Train: %.3f | Test: %.3f\n", auc_train, auc_test))
           pmin(pmax(x, 0), 1)
         }
         
-        # -------------------------------
         # 1) EL por cliente (añadir a df)
-        # -------------------------------
+        # ____________________________________________________________________________
+        
         df <- df %>%
           mutate(
             ym = floor_date(Date, "month"),
@@ -1014,23 +1010,26 @@ cat(sprintf("Logit AUC — Train: %.3f | Test: %.3f\n", auc_train, auc_test))
             EL_reg_income      = PD_reg   * LGD_reg * EAD_income,
             
             # EL por cliente — Modelos internos (Logit y RF) con LGD_use
+            
             EL_logit_principal = PD_logit * LGD_pred_beta * EAD_principal,
             EL_rf_principal    = PD_rf    * LGD_pred_beta * EAD_principal,
             EL_logit_income    = PD_logit * LGD_pred_beta * EAD_income,
             EL_rf_income       = PD_rf    * LGD_pred_beta * EAD_income
           )
         
-        # (Opcional) exportar detalle por cliente-mes
-        # write.csv(df %>% select(Id_client, Date, ym,
-        #                         PD_reg, PD_logit, PD_rf, LGD_reg, LGD_use,
-        #                         EAD_principal, EAD_income,
-        #                         EL_reg_principal, EL_logit_principal, EL_rf_principal,
-        #                         EL_reg_income,    EL_logit_income,    EL_rf_income),
-        #           "EL_by_client.csv", row.names = FALSE)
+        # Exportar detalle por cliente-mes
         
-        # ---------------------------------------
+         write.csv(df %>% select(Id_client, Date, ym,
+          PD_reg, PD_logit, PD_rf, LGD_reg, LGD_use,
+          EAD_principal, EAD_income,
+          EL_reg_principal, EL_logit_principal, EL_rf_principal,
+          EL_reg_income,    EL_logit_income,    EL_rf_income),
+          "EL_by_client.csv", row.names = FALSE)
+        
+        
         # 2) Resumen mensual (totales y ratios)
-        # ---------------------------------------
+        # ______________________________________________________________________________
+        
         monthly_summary <- df %>%
           group_by(ym) %>%
           summarise(
@@ -1060,12 +1059,12 @@ cat(sprintf("Logit AUC — Train: %.3f | Test: %.3f\n", auc_train, auc_test))
         
         print(head(monthly_summary, 12))
         
-        # (Opcional) exportar resumen mensual
-        # write.csv(monthly_summary, "EL_monthly_summary.csv", row.names = FALSE)
+        #exportar resumen mensual
+        write.csv(monthly_summary, "EL_monthly_summary.csv", row.names = FALSE)
         
-        # ---------------------------------------------------
+        
         # 3) Resumen de portafolio (total y ratios finales)
-        # ---------------------------------------------------
+        # ________________________________________________________________________________
         EL_portfolio <- tibble(
           Metric = c("EL_reg_principal","EL_logit_principal","EL_rf_principal",
                      "EL_reg_income","EL_logit_income","EL_rf_income"),
