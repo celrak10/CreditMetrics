@@ -1333,9 +1333,11 @@ cat(sprintf("Logit AUC — Train: %.3f | Test: %.3f\n", auc_train, auc_test))
           keep_gains  = FALSE   # pon TRUE si quieres permitir ganancias (spreads bajan)
         )
         
-        # -------------------------------------------------------------------------
+        
         # 5) Métricas: EL(sim), VaR, UL, ECAP
-        # -------------------------------------------------------------------------
+        #_________________________________________________________________________________
+        
+        
         EL_sim   <- mean(losses)
         VaR_999  <- as.numeric(quantile(losses, probs = 0.999))
         UL_999   <- VaR_999 - EL_sim
@@ -1347,10 +1349,10 @@ cat(sprintf("Logit AUC — Train: %.3f | Test: %.3f\n", auc_train, auc_test))
         cat(sprintf("UL (99.9%%) : %.2f\n", UL_999))
         cat(sprintf("ECap 99.9%% : %.2f\n", ECAP_999))
         
-        # (Opcional) guardar distribución
+        # guardar distribución
          write.csv(data.frame(loss=losses), "UL_losses_distribution.csv", row.names=FALSE)
         
-        # (Opcional) gráfico rápido (requiere ggplot2)
+        # gráfico rápido (requiere ggplot2)
         if (requireNamespace("ggplot2", quietly = TRUE)) {
           library(ggplot2)
           ggplot(data.frame(loss=losses), aes(x=loss)) +
