@@ -119,62 +119,62 @@ test  <- df %>% filter(Date >  cut_date, !is.na(y_next))
 # 5A) Model 1: Log Regression
 ################################################################################
 
-# Harmonize factor levels between train/test
-align_levels <- function(tr, te, vars){
-  for(v in vars){
-    lv <- union(levels(tr[[v]]), levels(te[[v]]))  # superset
-    tr[[v]] <- factor(tr[[v]], levels = lv, ordered = is.ordered(tr[[v]]))
-    te[[v]] <- factor(te[[v]], levels = lv, ordered = is.ordered(te[[v]]))
-  }
-  list(train = tr, test = te)
-}
-al <- align_levels(train, test, c("SIZE","Program","Cred_Type","Sector","NPL"))
-train <- al$train; test <- al$test
+    # Harmonize factor levels between train/test
+      align_levels <- function(tr, te, vars){
+      for(v in vars){
+      lv <- union(levels(tr[[v]]), levels(te[[v]]))  # superset
+      tr[[v]] <- factor(tr[[v]], levels = lv, ordered = is.ordered(tr[[v]]))
+      te[[v]] <- factor(te[[v]], levels = lv, ordered = is.ordered(te[[v]]))
+      }
+      list(train = tr, test = te)
+      }
+      al <- align_levels(train, test, c("SIZE","Program","Cred_Type","Sector","NPL"))
+      train <- al$train; test <- al$test
 
-# Drop any factor that ended single-level in TRAINset
+    # Drop any factor that ended single-level in TRAINset
 
-drop_if_one_level <- function(data, vars){
-  bad <- vapply(data[vars], function(x) nlevels(droplevels(x)) < 2, logical(1))
-  vars[!bad]
-}
-cat_vars <- drop_if_one_level(train, c("SIZE","Program","Cred_Type","Sector","NPL"))
+      drop_if_one_level <- function(data, vars){
+      bad <- vapply(data[vars], function(x) nlevels(droplevels(x)) < 2, logical(1))
+      vars[!bad]
+      }
+      cat_vars <- drop_if_one_level(train, c("SIZE","Program","Cred_Type","Sector","NPL"))
 
+      
+    # Inspect factor levels in the training slice
+    # ___________________________________________________________________________________
 
-
-
-# A) Inspect factor levels in the training slice
-# ─────────────────────────────────────────────────────────────
-
-f_logit <- as.formula(paste(
-  "y_next ~",
-  paste(c("Score",
+      f_logit <- as.formula(paste(
+      "y_next ~",
+      paste(c("Score",
           "Rate_Spread","Utilization",
           "Debt_to_Assets","FinDebt_to_Assets","Debt_to_Equity",
           "log_EAI","log_Loan",
           cat_vars),
         collapse = " + ")
-))
+      ))
 
-glm_fit <- glm(f_logit, data = train, family = binomial())
+      glm_fit <- glm(f_logit, data = train, family = binomial())
 
-summary(glm_fit)
-exp(coef(glm_fit))  # Odds ratios
+      summary(glm_fit)
+      exp(coef(glm_fit))  # Odds ratios
 
 
-# Predict PD (next-month)
-train$PD_logit <- predict(glm_fit, newdata = train, type = "response")
-test$PD_logit  <- predict(glm_fit, newdata = test,  type = "response")
+    # Predict PD (next-month)
+      
+      train$PD_logit <- predict(glm_fit, newdata = train, type = "response")
+      test$PD_logit  <- predict(glm_fit, newdata = test,  type = "response")
 
-auc_train <- auc(train$y_next, train$PD_logit)
-auc_test  <- auc(test$y_next,  test$PD_logit)
-cat(sprintf("Logit AUC — Train: %.3f | Test: %.3f\n", auc_train, auc_test))
+      auc_train <- auc(train$y_next, train$PD_logit)
+      auc_test  <- auc(test$y_next,  test$PD_logit)
+      cat(sprintf("Logit AUC — Train: %.3f | Test: %.3f\n", auc_train, auc_test))
 
- #Checking results_____________________________________________________________________________
+    #Checking results_____________________________________________________________________________
 
-    # --- Class balance
-        prop.table(table(train$y_next))
+    # Class balance
+      prop.table(table(train$y_next))
 
-    # --- ROC & KS (train/test)
+    # ROC & KS (train/test)
+      
       roc_tr  <- roc(train$y_next, train$PD_logit)
       roc_te  <- roc(test$y_next,  test$PD_logit)
       ks_tr   <- max(abs(roc_tr$sensitivities - (1 - roc_tr$specificities)))
@@ -182,24 +182,21 @@ cat(sprintf("Logit AUC — Train: %.3f | Test: %.3f\n", auc_train, auc_test))
       cat(sprintf("AUC train=%.3f  test=%.3f  |  KS train=%.3f  test=%.3f\n",
             auc(roc_tr), auc(roc_te), ks_tr, ks_te))
 
+      #Just only me because of my windows (only if presented error on graphs)
+      #while (dev.cur() > 1) dev.off()
+      #windows(width=8, height=5)   # on Windows
+      #par(mfrow = c(1,1), mar = c(5,4,2,1))  # sane margins  
       
-      # If multiple devices are open, close them (make sure graph appear on plots)
-      while (dev.cur() > 1) dev.off()
-      windows(width=8, height=5)   # on Windows
-      par(mfrow = c(1,1), mar = c(5,4,2,1))  # sane margins  
-      
-      # --- ROC curve plot (test)
+    # --- ROC curve plot (test)
       plot(roc_te, col="blue", main="ROC — Logistic (test)")
       
-      # PR curve (test) — NOTE: class0 = negatives, class1 = positives
+    # PR curve (test) — NOTE: class0 = negatives, class1 = positives
       pr <- PRROC::pr.curve(
         scores.class0 = test$PD_logit[test$y_next==0],
         scores.class1 = test$PD_logit[test$y_next==1],
         curve = TRUE
       )
       plot(pr, main="PR curve — Logistic (test)")
-      
-      
 
   #Monthly results____________________________________________________________________________
       
@@ -223,14 +220,14 @@ cat(sprintf("Logit AUC — Train: %.3f | Test: %.3f\n", auc_train, auc_test))
         arrange(date)        
       
       
-      ggplot(monthly_results, aes(x=date, y=auc, group=1)) +
-        geom_line() + geom_point() +
-        theme_minimal() +
-        labs(title="Monthly AUC — Logistic Regression", x="Month", y="AUC") +
-        scale_x_date(date_labels="%Y-%m", date_breaks="2 months") +
-        theme(axis.text.x = element_text(angle=90, hjust=1))
+        ggplot(monthly_results, aes(x=date, y=auc, group=1)) +
+          geom_line() + geom_point() +
+          theme_minimal() +
+          labs(title="Monthly AUC — Logistic Regression", x="Month", y="AUC") +
+          scale_x_date(date_labels="%Y-%m", date_breaks="2 months") +
+          theme(axis.text.x = element_text(angle=90, hjust=1))
       
-    #PD in dataset___________________________________________________________________
+    #Add PD in dataset___________________________________________________________________
       
       pd_results <- df %>%
         filter(!is.na(y_next)) %>%
@@ -262,26 +259,24 @@ cat(sprintf("Logit AUC — Train: %.3f | Test: %.3f\n", auc_train, auc_test))
       writexl::write_xlsx(pd_results, "PD_logit_by_client_month.xlsx")
    
       
-      
-      
 ###############################################################################
 # 5B) Model 2: Random Forest
 ################################################################################
     
-      # Asegurar que la etiqueta sea factor 0/1 para ranger con probability=TRUE
-      train <- train %>% mutate(y_next = factor(y_next, levels = c(0,1)))
-      test  <- test  %>% mutate(y_next = factor(y_next, levels = c(0,1)))
+      # Checking label dummy para ranger con probability=TRUE
+        train <- train %>% mutate(y_next = factor(y_next, levels = c(0,1)))
+        test  <- test  %>% mutate(y_next = factor(y_next, levels = c(0,1)))
       
-      # Fórmula: reutilizamos las mismas variables del logit
-      f_rf <- f_logit  # misma especificación de predictores
+      # Fórmula: using the same logit specification
+        f_rf <- f_logit  # same specification of predictors
       
-      # (Opcional) ponderación por desbalance
-      pos_rate <- mean(as.numeric(as.character(train$y_next)))
-      class_w  <- c("0" = 0.5/(1 - pos_rate + 1e-9),
+      # Ponderación por desbalance
+        pos_rate <- mean(as.numeric(as.character(train$y_next)))
+        class_w  <- c("0" = 0.5/(1 - pos_rate + 1e-9),
                     "1" = 0.5/(pos_rate + 1e-9))
       
-      set.seed(202)  # reproducibilidad
-      rf_fit <- ranger::ranger(
+        set.seed(202)  # reproducibilidad
+        rf_fit <- ranger::ranger(
         formula         = f_rf,
         data            = train,
         num.trees       = 500,
@@ -293,64 +288,66 @@ cat(sprintf("Logit AUC — Train: %.3f | Test: %.3f\n", auc_train, auc_test))
         probability     = TRUE,      # ¡para obtener PD!
         class.weights   = class_w,   # quita si no quieres ponderar
         seed            = 202
-      )
+        )
       
-      # Predicción de PD (probabilidad de clase 1)
-      get_pd <- function(pred) {
-        # ranger devuelve una matriz con columnas "0" y "1"
+      # PD prediction (class 1 probability)
+        get_pd <- function(pred) {
+        
+        # ranger return 1,0 matrix
         if(is.matrix(pred$predictions)) pred$predictions[, "1"] else pred$predictions
-      }
+        }
       
-      pd_tr <- get_pd(predict(rf_fit, data = train, type = "response"))
-      pd_te <- get_pd(predict(rf_fit, data = test,  type = "response"))
+        pd_tr <- get_pd(predict(rf_fit, data = train, type = "response"))
+        pd_te <- get_pd(predict(rf_fit, data = test,  type = "response"))
       
-      train$PD_rf <- pd_tr
-      test$PD_rf  <- pd_te
+        train$PD_rf <- pd_tr
+        test$PD_rf  <- pd_te
       
-      # Métricas AUC / KS / PR
-      auc_tr_rf <- pROC::auc(as.numeric(as.character(train$y_next)), train$PD_rf)
-      auc_te_rf <- pROC::auc(as.numeric(as.character(test$y_next)),  test$PD_rf)
+      # AUC / KS / PR
+        auc_tr_rf <- pROC::auc(as.numeric(as.character(train$y_next)), train$PD_rf)
+        auc_te_rf <- pROC::auc(as.numeric(as.character(test$y_next)),  test$PD_rf)
       
-      roc_tr_rf <- pROC::roc(as.numeric(as.character(train$y_next)), train$PD_rf)
-      roc_te_rf <- pROC::roc(as.numeric(as.character(test$y_next)),  test$PD_rf)
-      ks_tr_rf  <- max(abs(roc_tr_rf$sensitivities - (1 - roc_tr_rf$specificities)))
-      ks_te_rf  <- max(abs(roc_te_rf$sensitivities - (1 - roc_te_rf$specificities)))
+        roc_tr_rf <- pROC::roc(as.numeric(as.character(train$y_next)), train$PD_rf)
+        roc_te_rf <- pROC::roc(as.numeric(as.character(test$y_next)),  test$PD_rf)
+        ks_tr_rf  <- max(abs(roc_tr_rf$sensitivities - (1 - roc_tr_rf$specificities)))
+        ks_te_rf  <- max(abs(roc_te_rf$sensitivities - (1 - roc_te_rf$specificities)))
       
-      cat(sprintf("RF — AUC Train: %.3f | Test: %.3f | KS Train: %.3f | KS Test: %.3f\n",
+        cat(sprintf("RF — AUC Train: %.3f | Test: %.3f | KS Train: %.3f | KS Test: %.3f\n",
                   auc_tr_rf, auc_te_rf, ks_tr_rf, ks_te_rf))
       
       # PR (test)
-      pr_rf <- PRROC::pr.curve(
+        pr_rf <- PRROC::pr.curve(
         scores.class0 = test$PD_rf[as.numeric(as.character(test$y_next))==1],
         scores.class1 = test$PD_rf[as.numeric(as.character(test$y_next))==0],
         curve = TRUE
-      )
-      plot(pr_rf, main = "PR curve — Random Forest (test)")
+        )
+        plot(pr_rf, main = "PR curve — Random Forest (test)")
       
       # Importancia de variables (permutation)
-      imp <- as.data.frame(rf_fit$variable.importance, stringsAsFactors = FALSE)
-      colnames(imp) <- "Importance"
-      imp$Variable <- rownames(imp)
-      imp <- imp %>% arrange(desc(Importance))
-      print(head(imp, 20))
-      ggplot(imp %>% slice_max(Importance, n = 20),
+        imp <- as.data.frame(rf_fit$variable.importance, stringsAsFactors = FALSE)
+        colnames(imp) <- "Importance"
+        imp$Variable <- rownames(imp)
+        imp <- imp %>% arrange(desc(Importance))
+        print(head(imp, 20))
+        ggplot(imp %>% slice_max(Importance, n = 20),
              aes(x=reorder(Variable, Importance), y=Importance)) +
         geom_col() + coord_flip() +
         labs(title="Variable Importance — Random Forest", x=NULL, y="Permutation Importance") +
         theme_minimal()
       
      
-      # Evaluación mensual con RF (AUC por mes)
-      # ─────────────────────────────────────────────────────────────
-      monthly_results_rf <- df %>%
+      # Monthly review with RF (monthly AUC)
+      # _______________________________________________________________________________________
+      
+        monthly_results_rf <- df %>%
         filter(!is.na(y_next)) %>%
         group_split(YEAR, MONTH) %>%
         purrr::map_df(function(d){
           if(nrow(d) < 100 | length(unique(d$y_next)) < 2) return(NULL)
           
-          # asegurar niveles y tipos como en train
+      # asegurar niveles y tipos como en train
           for (v in c("SIZE","Program","Cred_Type","Sector","NPL")) {
-            d[[v]] <- factor(d[[v]], levels = levels(train[[v]]), ordered = is.ordered(train[[v]]))
+          d[[v]] <- factor(d[[v]], levels = levels(train[[v]]), ordered = is.ordered(train[[v]]))
           }
           d$y_next <- factor(d$y_next, levels = c(0,1))
           
@@ -374,11 +371,11 @@ cat(sprintf("Logit AUC — Train: %.3f | Test: %.3f\n", auc_train, auc_test))
             month = unique(d$MONTH),
             auc   = as.numeric(auc_val)
           )
-        }) %>%
-        mutate(date = as.Date(paste(year, month, "01", sep = "-"))) %>%
-        arrange(date)
+          }) %>%
+          mutate(date = as.Date(paste(year, month, "01", sep = "-"))) %>%
+          arrange(date)
       
-      ggplot(monthly_results_rf, aes(x=date, y=auc, group=1)) +
+        ggplot(monthly_results_rf, aes(x=date, y=auc, group=1)) +
         geom_line() + geom_point() +
         theme_minimal() +
         labs(title="Monthly AUC — Random Forest", x="Month", y="AUC") +
@@ -387,8 +384,9 @@ cat(sprintf("Logit AUC — Train: %.3f | Test: %.3f\n", auc_train, auc_test))
       
       
       # Guardar PD por cliente-mes (RF mensual)
-      # ─────────────────────────────────────────────────────────────
-      pd_results_rf <- df %>%
+      # ________________________________________________________________________________________
+        
+        pd_results_rf <- df %>%
         filter(!is.na(y_next)) %>%
         group_split(YEAR, MONTH) %>%
         purrr::map_df(function(d){
@@ -419,22 +417,22 @@ cat(sprintf("Logit AUC — Train: %.3f | Test: %.3f\n", auc_train, auc_test))
         }) %>%
         arrange(Date, Id_client)
       
-      # Añadir al df (columna PD_rf_month) y exportar
-      df <- df %>%
+      # Add df (column PD_rf_month) export
+        df <- df %>%
         left_join(pd_results_rf %>% select(Id_client, Date, PD_rf_month = PD_rf),
                   by = c("Id_client","Date"))
       
-      write.csv(pd_results_rf, "PD_rf_by_client_month.csv", row.names = FALSE)
-      write.csv(monthly_results_rf, "Monthly_AUC_RF.csv", row.names = FALSE)
+        write.csv(pd_results_rf, "PD_rf_by_client_month.csv", row.names = FALSE)
+        write.csv(monthly_results_rf, "Monthly_AUC_RF.csv", row.names = FALSE)
       
       
-  #Comparing models___________________________________________________________       
+  #Comparing models (log vs RF)___________________________________________________________       
     
-      compare_monthly <- monthly_results %>%
+        compare_monthly <- monthly_results %>%
         transmute(date, auc, model = "Logit") %>%
         bind_rows(monthly_results_rf %>% transmute(date, auc, model = "Random Forest"))
       
-      ggplot(compare_monthly, aes(x = date, y = auc, color = model)) +
+        ggplot(compare_monthly, aes(x = date, y = auc, color = model)) +
         geom_line() + geom_point() +
         theme_minimal() +
         labs(title = "Monthly AUC — Logit vs Random Forest", x = "Month", y = "AUC") +
@@ -447,30 +445,32 @@ cat(sprintf("Logit AUC — Train: %.3f | Test: %.3f\n", auc_train, auc_test))
         mutate(year = lubridate::year(date)) %>%
         group_by(model, year) %>%
         summarise(mean_auc = mean(auc, na.rm = TRUE), .groups = "drop")
-      print(annual_auc)
+        print(annual_auc)
       
-    #Optimal THRESHOLD KS in test  
+    # Optimal THRESHOLD KS in test____________________________________________________________  
       
-      # Encontrar umbral que maximiza KS
-      df_thr <- tibble(
+      # Find threshold that max KS
+        
+        df_thr <- tibble(
         thr  = seq(0, 1, by = 0.001),
         tpr  = map_dbl(thr, ~ mean(test$PD_rf[test$y_next=="1"] >= .x)),
         fpr  = map_dbl(thr, ~ mean(test$PD_rf[test$y_next=="0"] >= .x))
-      ) %>% mutate(ks = tpr - fpr)
+        ) %>% mutate(ks = tpr - fpr)
       
-      best_thr <- df_thr$thr[which.max(df_thr$ks)]
-      cat(sprintf("Best threshold (KS) = %.3f | KS = %.3f\n", best_thr, max(df_thr$ks)))
+        best_thr <- df_thr$thr[which.max(df_thr$ks)]
+        cat(sprintf("Best threshold (KS) = %.3f | KS = %.3f\n", best_thr, max(df_thr$ks)))
       
-      # Matriz de confusión en test con ese umbral
-      pred_label <- ifelse(test$PD_rf >= best_thr, 1, 0)
-      table(Pred = pred_label, Real = as.integer(as.character(test$y_next)))
+      # Matriz de  confusión en test con ese umbral
+        
+        pred_label <- ifelse(test$PD_rf >= best_thr, 1, 0)
+        table(Pred = pred_label, Real = as.integer(as.character(test$y_next)))
       
-    #Recalib curve 
+      #Recalib curve 
       
-      calib <- tibble(
+        calib <- tibble(
         pd = test$PD_rf,
         y  = as.integer(as.character(test$y_next))
-      ) %>%
+        ) %>%
         mutate(bin = ntile(pd, 10)) %>%
         group_by(bin) %>%
         summarise(
@@ -479,47 +479,46 @@ cat(sprintf("Logit AUC — Train: %.3f | Test: %.3f\n", auc_train, auc_test))
           .groups = "drop"
         )
       
-      ggplot(calib, aes(x = pd_mean, y = rate)) +
+        ggplot(calib, aes(x = pd_mean, y = rate)) +
         geom_point() + geom_line() +
         geom_abline(slope = 1, intercept = 0, linetype = 2) +
         coord_equal() +
         labs(title = "Calibration — Random Forest (test)", x = "Predicted PD (bin mean)", y = "Observed default rate") +
         theme_minimal()
       
+      #Tunning of RF________________________________________________________________________________
       
-      
-  #Tunning of RF
-      
-      train <- train %>% mutate(y_next = factor(y_next, levels = c(0,1))) #Labels and levels
-      test  <- test  %>% mutate(y_next  = factor(y_next,  levels = c(0,1)))
+        train <- train %>% mutate(y_next = factor(y_next, levels = c(0,1))) #Labels and levels
+        test  <- test  %>% mutate(y_next  = factor(y_next,  levels = c(0,1)))
       
       # predictors extractor function
       
-      p <- length(attr(terms(f_rf), "term.labels"))
-      mtry_default <- floor(sqrt(p))
+        p <- length(attr(terms(f_rf), "term.labels"))
+        mtry_default <- floor(sqrt(p))
       
-      # 1) Grid definition
-      grid <- expand_grid(
-        mtry          = c(mtry_default, max(1, round(1.5 * mtry_default))),
-        min.node.size = c(10, 20, 50),
-        num.trees     = c(300, 600)
-      )
+      # Grid definition
+        grid <- expand_grid(
+          mtry          = c(mtry_default, max(1, round(1.5 * mtry_default))),
+          min.node.size = c(10, 20, 50),
+          num.trees     = c(300, 600)
+        )
       
-      # 2) Monthly validation (last 6 months of train)
-      train_months <- train %>% mutate(ym = floor_date(Date, "month")) %>% pull(ym) %>% unique() %>% sort()
-      n_valid <- min(6, length(train_months) - 3)  # asegura que haya meses previos para entrenar
-      valid_months <- tail(train_months, n_valid)
+      # Monthly validation (last 6 months of train)
       
-      # 3) class weight fo unbalanced
-      pos_rate <- mean(as.numeric(as.character(train$y_next)))
-      class_w  <- c("0" = 0.5/(1 - pos_rate + 1e-9),
+        train_months <- train %>% mutate(ym = floor_date(Date, "month")) %>% pull(ym) %>% unique() %>% sort()
+        n_valid <- min(6, length(train_months) - 3)  #make sure that it is months to train
+        valid_months <- tail(train_months, n_valid)
+      
+      # class weight fo unbalanced
+        pos_rate <- mean(as.numeric(as.character(train$y_next)))
+        class_w  <- c("0" = 0.5/(1 - pos_rate + 1e-9),
                     "1" = 0.5/(pos_rate + 1e-9))
       
-      get_pd <- function(pred) {
+        get_pd <- function(pred) {
         if (is.matrix(pred$predictions)) pred$predictions[, "1"] else pred$predictions
-      } #get the pd of RF
+        } #get the pd of RF
       
-      # 4) Evaluation loop rolling-origin
+      # Evaluation loop rolling-origin
         evals <- map_df(seq_len(nrow(grid)), function(i){
           pars <- grid[i, ]
           aucs  <- c()
@@ -568,12 +567,12 @@ cat(sprintf("Logit AUC — Train: %.3f | Test: %.3f\n", auc_train, auc_test))
         
         print(evals)
         
-        # 5) Elegir mejor combo
+        # Choosing best
         best <- evals %>% slice(1)
         cat(sprintf("Best RF params -> mtry=%d, min.node.size=%d, num.trees=%d | mean AUC=%.3f\n",
                     best$mtry, best$min.node.size, best$num.trees, best$mean_auc))
         
-        # 6) Reentrenar en TODO train con los mejores hiperparámetros y evaluar en test
+        # 6) Retraining with best hiperparámetros y evaluation on test
         rf_best <- ranger(
           formula         = f_rf,
           data            = train,
@@ -585,26 +584,27 @@ cat(sprintf("Logit AUC — Train: %.3f | Test: %.3f\n", auc_train, auc_test))
           importance      = "permutation",
           class.weights   = class_w,
           seed            = 2025
-        )
+          )
         
-        pd_tr_best <- get_pd(predict(rf_best, data = train, type = "response"))
-        pd_te_best <- get_pd(predict(rf_best, data = test,  type = "response"))
+          pd_tr_best <- get_pd(predict(rf_best, data = train, type = "response"))
+          pd_te_best <- get_pd(predict(rf_best, data = test,  type = "response"))
         
-        train$PD_rf_best <- pd_tr_best
-        test$PD_rf_best  <- pd_te_best
+          train$PD_rf_best <- pd_tr_best
+          test$PD_rf_best  <- pd_te_best
         
-        roc_tr_best <- pROC::roc(as.numeric(as.character(train$y_next)), train$PD_rf_best, quiet = TRUE)
-        roc_te_best <- pROC::roc(as.numeric(as.character(test$y_next)),  test$PD_rf_best,  quiet = TRUE)
-        auc_tr_best <- pROC::auc(roc_tr_best)
-        auc_te_best <- pROC::auc(roc_te_best)
-        ks_tr_best  <- max(abs(roc_tr_best$sensitivities - (1 - roc_tr_best$specificities)))
-        ks_te_best  <- max(abs(roc_te_best$sensitivities - (1 - roc_te_best$specificities)))
+          roc_tr_best <- pROC::roc(as.numeric(as.character(train$y_next)), train$PD_rf_best, quiet = TRUE)
+          roc_te_best <- pROC::roc(as.numeric(as.character(test$y_next)),  test$PD_rf_best,  quiet = TRUE)
+          auc_tr_best <- pROC::auc(roc_tr_best)
+          auc_te_best <- pROC::auc(roc_te_best)
+          ks_tr_best  <- max(abs(roc_tr_best$sensitivities - (1 - roc_tr_best$specificities)))
+          ks_te_best  <- max(abs(roc_te_best$sensitivities - (1 - roc_te_best$specificities)))
         
-        cat(sprintf("RF (best) — AUC Train: %.3f | Test: %.3f | KS Train: %.3f | KS Test: %.3f\n",
+          cat(sprintf("RF (best) — AUC Train: %.3f | Test: %.3f | KS Train: %.3f | KS Test: %.3f\n",
                     auc_tr_best, auc_te_best, ks_tr_best, ks_te_best))
         
-        # 7) (Opcional) Visualizar ranking de combinaciones
-        ggplot(evals, aes(x = interaction(mtry, min.node.size, num.trees, sep="/"), y = mean_auc)) +
+        # Visualize ranking of combinations
+          
+          ggplot(evals, aes(x = interaction(mtry, min.node.size, num.trees, sep="/"), y = mean_auc)) +
           geom_col() + coord_flip() +
           coord_cartesian(ylim = c(0.981, 0.984)) +  # zoom
           geom_text(aes(label = sprintf("%.3f", mean_auc)), hjust = -0.1, size = 3) +
@@ -614,32 +614,34 @@ cat(sprintf("Logit AUC — Train: %.3f | Test: %.3f\n", auc_train, auc_test))
  #FINAL MODEL______________________________________________________________________       
         
         
-        best <- evals %>% slice(1)  # already your top row
+          best <- evals %>% slice(1)  # already your top row
         
-        rf_best <- ranger(
-          formula         = f_rf,
-          data            = train,
-          num.trees       = best$num.trees,
-          mtry            = best$mtry,
-          min.node.size   = best$min.node.size,
-          classification  = TRUE,
-          probability     = TRUE,
-          importance      = "permutation",
-          class.weights   = class_w,
-          seed            = 2025
-        )
+          rf_best <- ranger(
+            formula         = f_rf,
+            data            = train,
+            num.trees       = best$num.trees,
+            mtry            = best$mtry,
+            min.node.size   = best$min.node.size,
+            classification  = TRUE,
+            probability     = TRUE,
+            importance      = "permutation",
+            class.weights   = class_w,
+            seed            = 2025
+          )
         
         # Evaluate on test
-        get_pd <- function(pred) if(is.matrix(pred$predictions)) pred$predictions[, "1"] else pred$predictions
-        test$PD_rf_best  <- get_pd(predict(rf_best, data = test,  type = "response"))
-        train$PD_rf_best <- get_pd(predict(rf_best, data = train, type = "response"))
         
-        roc_tr_best <- pROC::roc(as.numeric(as.character(train$y_next)), train$PD_rf_best, quiet=TRUE)
-        roc_te_best <- pROC::roc(as.numeric(as.character(test$y_next)),  test$PD_rf_best,  quiet=TRUE)
-        cat(sprintf("RF(best) AUC — Train: %.3f | Test: %.3f\n", pROC::auc(roc_tr_best), pROC::auc(roc_te_best)))
+          get_pd <- function(pred) if(is.matrix(pred$predictions)) pred$predictions[, "1"] else pred$predictions
+          test$PD_rf_best  <- get_pd(predict(rf_best, data = test,  type = "response"))
+          train$PD_rf_best <- get_pd(predict(rf_best, data = train, type = "response"))
         
-        # Recalcular AUC mensual con los mejores hiperparámetros
-        monthly_results_rf_best <- df %>%
+          roc_tr_best <- pROC::roc(as.numeric(as.character(train$y_next)), train$PD_rf_best, quiet=TRUE)
+          roc_te_best <- pROC::roc(as.numeric(as.character(test$y_next)),  test$PD_rf_best,  quiet=TRUE)
+          cat(sprintf("RF(best) AUC — Train: %.3f | Test: %.3f\n", pROC::auc(roc_tr_best), pROC::auc(roc_te_best)))
+        
+        # Redoing monthly AUC with best hiperparámeters
+        
+          monthly_results_rf_best <- df %>%
           filter(!is.na(y_next)) %>%
           group_split(YEAR, MONTH) %>%
           purrr::map_df(function(d){
@@ -669,28 +671,29 @@ cat(sprintf("Logit AUC — Train: %.3f | Test: %.3f\n", auc_train, auc_test))
           arrange(date)
         
         # Plot
-        ggplot(monthly_results_rf_best, aes(x=date, y=auc, group=1)) +
+        
+          ggplot(monthly_results_rf_best, aes(x=date, y=auc, group=1)) +
           geom_line() + geom_point() +
           theme_minimal() +
           labs(title="Monthly AUC — Random Forest (best params)", x="Month", y="AUC") +
           scale_x_date(date_labels="%Y-%m", date_breaks="2 months") +
           theme(axis.text.x = element_text(angle=90, hjust=1))
         
-        # exportING BEST RESULTS CALIBRATION
-        write.csv(monthly_results_rf_best, "Monthly_AUC_RF_best.csv", row.names = FALSE)
+          # exportING BEST RESULTS CALIBRATION
+          write.csv(monthly_results_rf_best, "Monthly_AUC_RF_best.csv", row.names = FALSE)
       
         
         #Brier Score______________________________________________________________________
         
-        brier <- function(y, p) {
-          y <- as.numeric(y)
-          if (all(y %in% c(0,1)) == FALSE) y <- as.numeric(as.character(y))
-          mean((p - y)^2, na.rm = TRUE)
-        }
+          brier <- function(y, p) {
+            y <- as.numeric(y)
+            if (all(y %in% c(0,1)) == FALSE) y <- as.numeric(as.character(y))
+            mean((p - y)^2, na.rm = TRUE)
+          }
         
-        evals_brier <- purrr::map_df(seq_len(nrow(grid)), function(i){
-          pars <- grid[i, ]
-          bs   <- c()
+          evals_brier <- purrr::map_df(seq_len(nrow(grid)), function(i){
+            pars <- grid[i, ]
+            bs   <- c()
           
           for (vm in valid_months) {
             d_val <- train %>% dplyr::filter(lubridate::floor_date(Date,"month") == vm)
@@ -827,7 +830,7 @@ cat(sprintf("Logit AUC — Train: %.3f | Test: %.3f\n", auc_train, auc_test))
       #CALIBRATION CURVES_____________________________________________________________________
         
         # Helper: build calibration table
-        calibration_table <- function(df, pd_col, y_col, n_bins = 10) {
+          calibration_table <- function(df, pd_col, y_col, n_bins = 10) {
           df %>%
             mutate(
               pd = !!sym(pd_col),
@@ -841,23 +844,23 @@ cat(sprintf("Logit AUC — Train: %.3f | Test: %.3f\n", auc_train, auc_test))
               n         = n(),
               .groups="drop"
             )
-        }
+          }
         
         # Calibration tables for Logit and RF
-        calib_logit <- calibration_table(test, "PD_logit", "y_next") %>% mutate(model="Logit")
-        calib_rf    <- calibration_table(test, "PD_rf_b", "y_next")  %>% mutate(model="RF")
+          calib_logit <- calibration_table(test, "PD_logit", "y_next") %>% mutate(model="Logit")
+          calib_rf    <- calibration_table(test, "PD_rf_b", "y_next")  %>% mutate(model="RF")
         
-        calib_all <- bind_rows(calib_logit, calib_rf)
+          calib_all <- bind_rows(calib_logit, calib_rf)
         
         # Plot calibration curves
-        ggplot(calib_all, aes(x=pd_mean, y=obs_rate, color=model)) +
-          geom_point(size=3) + geom_line() +
-          geom_abline(slope=1, intercept=0, linetype=2, color="black") +
-          scale_x_continuous(limits=c(0,max(calib_all$pd_mean)*1.1)) +
-          scale_y_continuous(limits=c(0,max(calib_all$obs_rate)*1.1)) +
-          labs(title="Calibration Curve — Test Set",
+          ggplot(calib_all, aes(x=pd_mean, y=obs_rate, color=model)) +
+            geom_point(size=3) + geom_line() +
+            geom_abline(slope=1, intercept=0, linetype=2, color="black") +
+            scale_x_continuous(limits=c(0,max(calib_all$pd_mean)*1.1)) +
+            scale_y_continuous(limits=c(0,max(calib_all$obs_rate)*1.1)) +
+            labs(title="Calibration Curve — Test Set",
                x="Predicted PD (bin mean)", y="Observed Default Rate") +
-          theme_minimal()
+            theme_minimal()
         
 
 ##############################################################################################        
@@ -866,98 +869,104 @@ cat(sprintf("Logit AUC — Train: %.3f | Test: %.3f\n", auc_train, auc_test))
   
   #Beta________________________________________________________________________________________            
     
-            # Preprocesamiento: LGD en [0,1]
-        df <- df %>%
-          mutate(LGD_ratio = LGD / 100) %>%             # convertir % a proporción
-          filter(!is.na(LGD_ratio))
+        # Preprocesamiento: LGD en [0,1]
+          
+          df <- df %>%
+            mutate(LGD_ratio = LGD / 100) %>%
+            filter(!is.na(LGD_ratio))
         
         # Ajuste (ejemplo con pocas variables)
-        f_beta <- as.formula("LGD_ratio ~ Utilization + Debt_to_Assets + log_EAI + log_Loan + Score")
         
-        beta_fit <- betareg(f_beta, data=df, link="logit")
+          f_beta <- as.formula("LGD_ratio ~ Utilization + Debt_to_Assets + log_EAI + log_Loan + Score")
         
-        summary(beta_fit)
+          beta_fit <- betareg(f_beta, data=df, link="logit")
+        
+          summary(beta_fit)
         
         # Predicción (en %)
-        df$LGD_pred_beta <- predict(beta_fit, newdata=df, type="response") * 100
+          
+          df$LGD_pred_beta <- predict(beta_fit, newdata=df, type="response") * 100
         
-        #betareg usa link logit y modela directamente la distribución Beta.
-        #Ideal si quieres interpretabilidad (coeficientes, efectos).
-        #Métricas: R² pseudo, RMSE, log-likelihood. 
+        #betareg use link logit and direct modeling the Beta distribution.
+        #interpretation (coeficients, efects) is perfect.
+        #I use R² pseudo, RMSE, log-likelihood. 
         
   #Gradient Boosting_____________________________________________________________________________      
         
         # LGD tratada como un problema de regresión gaussian since LGD is not 1 or 0.
-        # Regulatory LGD Calculation (In Mexico is mandatory follow the law to establish LGD)
+        # Regulatory LGD Calculation (In Mexico is mandatory, I follow the law to establish LGD)
         
-        # Convertimos LGD a [0,1]
-        df <- df %>% mutate(LGD_ratio = pmin(pmax(LGD/100, 0), 1)) %>% filter(!is.na(LGD_ratio))
+        # Transform LGD a [0,1]
+          
+          df <- df %>% mutate(LGD_ratio = pmin(pmax(LGD/100, 0), 1)) %>% filter(!is.na(LGD_ratio))
 
         
-        set.seed(2025)
-        gbm_fit <- gbm(
-          LGD_ratio ~ Utilization + Debt_to_Assets + log_EAI + log_Loan + Score + SIZE + Sector,
-          data = df,
-          distribution = "gaussian",    # <- NO bernoulli
-          n.trees = 3000,
-          interaction.depth = 3,
-          shrinkage = 0.01,
-          bag.fraction = 0.8,
-          train.fraction = 0.8,
-          n.cores = 1                   # opcional en Windows
-        )
+          set.seed(2025)
+          gbm_fit <- gbm(
+            LGD_ratio ~ Utilization + Debt_to_Assets + log_EAI + log_Loan + Score + SIZE + Sector,
+            data = df,
+            distribution = "gaussian",    # <- NO bernoulli
+            n.trees = 3000,
+            interaction.depth = 3,
+            shrinkage = 0.01,
+            bag.fraction = 0.8,
+            train.fraction = 0.8,
+            n.cores = 1                   # optional on Windows don't run GPUs
+            )
         
-        # Seleccionar número óptimo de árboles por OOB/validación interna
-        best_iter <- gbm.perf(gbm_fit, method = "OOB", plot.it = FALSE)
+        # Select optimal number of trees for OOB/inten validation
+          
+          best_iter <- gbm.perf(gbm_fit, method = "OOB", plot.it = FALSE)
         
-        # Predicción y recorte a [0,1]
-        df$LGD_pred_gbm <- predict(gbm_fit, newdata = df, n.trees = best_iter, type = "response")
-        df$LGD_pred_gbm <- pmin(pmax(df$LGD_pred_gbm, 0), 1) * 100  # en %
+        # Prediction [0,1]
+          
+          df$LGD_pred_gbm <- predict(gbm_fit, newdata = df, n.trees = best_iter, type = "response")
+          df$LGD_pred_gbm <- pmin(pmax(df$LGD_pred_gbm, 0), 1) * 100  # en %
         
-        # Importancia de variables
-        print(summary(gbm_fit, n.trees = best_iter))
+        # Checking
+          
+          print(summary(gbm_fit, n.trees = best_iter))
         
-        rmse <- function(y, p) sqrt(mean((p - y)^2))
-        mae  <- function(y, p) mean(abs(p - y))
+          rmse <- function(y, p) sqrt(mean((p - y)^2))
+          mae  <- function(y, p) mean(abs(p - y))
         
-        lgd_true <- df$LGD_ratio * 100
-        lgd_gbm  <- df$LGD_pred_gbm
+          lgd_true <- df$LGD_ratio * 100
+          lgd_gbm  <- df$LGD_pred_gbm
         
-        cat(sprintf("RMSE=%.3f | MAE=%.3f\n", rmse(lgd_true, lgd_gbm), mae(lgd_true, lgd_gbm)))
+          cat(sprintf("RMSE=%.3f | MAE=%.3f\n", rmse(lgd_true, lgd_gbm), mae(lgd_true, lgd_gbm)))
         
-        #GBM es flexible y captura no linealidades e interacciones.
-        #Métricas: RMSE, MAE, R², pero también puedes comparar Brier Score adaptado a LGD (error cuadrático medio).
-        #Importancia de variables (summary(gbm_fit)) te dice qué explica más la LGD.
-        
-        #Beta Regression - Mejor para interpretación, modelo económico.
-        #GBM - Mejor para predicción pura y no linealidades.
-        
+        #GBM is flexible and capture non linearity and interactions.
+        #I use RMSE, MAE, R²
+      
         
 ##############################################################################################        
 #7 EAI Expected Annual Income / Expected Annual Interest
 ############################################################################################        
+        
         #Remove clients with zero amount (churn)
         
-        # 1) Define las variables usadas por el modelo
+        # Variables definition
+        
         vars <- c("EAI","Utilization","Debt_to_Assets","log_EAI","log_Loan","Score","SIZE","Sector")
         
-        # 2) Índice de filas completas (sin NA en esas columnas)
+        # complete clients no NA 
+          
         idx <- complete.cases(df[, vars])
         
-        # 3) Ajusta el modelo SOLO con las filas válidas
+        # 3) linear reg with no churn
         lm_fit <- lm(EAI ~ Utilization + Debt_to_Assets + log_EAI + log_Loan + Score + SIZE + Sector,
                      data = df[idx, ])
         
         summary(lm_fit)
         
-        # 4) Predice SOLO para las filas válidas
+        # 4) Predict
         pred_clean <- predict(lm_fit, newdata = df[idx, ])
         
-        # 5) Crea la columna en df y coloca las predicciones en las filas correspondientes
+        # 5) make the column on dataset df
         df$EAI_pred_lm <- NA_real_
         df$EAI_pred_lm[idx] <- pred_clean
         
-        # 6) Métricas (sobre las filas válidas)
+        # 6) Métrics 
         rmse <- function(y, p) sqrt(mean((p - y)^2))
         mae  <- function(y, p) mean(abs(p - y))
         
@@ -970,46 +979,47 @@ cat(sprintf("Logit AUC — Train: %.3f | Test: %.3f\n", auc_train, auc_test))
 #8 EXPECTED LOSS CALCULATION
 #########################################################################################
         
+        
         # EL_i = PD_i * LGD_i * EAD_i
-        # Donde:
+        # where:
         #   - PD: usa RF mensual si existe, luego Logit mensual, luego Logit (o PD_Reg/100)
         #   - LGD: usa GBM si existe, luego Beta, luego LGD (% regulatoria)/100
-        #   - EAD: te doy dos vistas:
-        #       (A) Principal expuesto: usa Capital si existe; si no, Loan_Amount_Local
-        #       (B) Ingreso esperado (tipo interés): usa EAI_pred_lm si existe; si no, EAI
+        #   - EAD: 2 ways
+        #       i.Principal expuesto: use Capital
+        #       ii.Ingreso esperado (tipo interés): use EAI_pred_lm if NA then EAI
 
-        # Normaliza a [0,1] si viniera en %
+        # Normalization to [0,1] of all the variables %
         to_prob <- function(x) {
           if (is.null(x)) return(NULL)
           if (any(x > 1, na.rm = TRUE)) x <- x / 100
           pmin(pmax(x, 0), 1)
         }
         
-        # 1) EL por cliente (añadir a df)
+        # 1) Expected Loss by client and adding to main dataset df
         # ____________________________________________________________________________
         
         df <- df %>%
           mutate(
             ym = floor_date(Date, "month"),
             
-            # PDs (todo en [0,1])
+            # PDs (all on [0,1])
             PD_logit = to_prob(PD_logit_month),
             PD_rf    = to_prob(PD_rf_month),
             PD_reg   = to_prob(PD_Reg),
             
-            # LGD regulatoria vs “de uso” (modelo/mixta), en [0,1]
+            # LGD reg (Regulatory Standard Approach) vs “Predicted” (Beta), en [0,1]
             LGD_reg  = to_prob(LGD),
             LGD_pred_beta  = to_prob(LGD_pred_beta),
             
-            # EAD (dos vistas)
+            # EAD (i, ii)
             EAD_principal = pmax(coalesce(Capital, Loan_Amount_Local), 0),
             EAD_income    = pmax(coalesce(EAI_pred_lm, EAI), 0),
             
-            # EL por cliente — Regulatorio
+            # EL by client — Regulatory
             EL_reg_principal   = PD_reg   * LGD_reg * EAD_principal,
             EL_reg_income      = PD_reg   * LGD_reg * EAD_income,
             
-            # EL por cliente — Modelos internos (Logit y RF) con LGD_use
+            # EL by client — Internal model (Logit y RF) with LGD of beta pred
             
             EL_logit_principal = PD_logit * LGD_pred_beta * EAD_principal,
             EL_rf_principal    = PD_rf    * LGD_pred_beta * EAD_principal,
@@ -1017,7 +1027,7 @@ cat(sprintf("Logit AUC — Train: %.3f | Test: %.3f\n", auc_train, auc_test))
             EL_rf_income       = PD_rf    * LGD_pred_beta * EAD_income
           )
         
-        # Exportar detalle por cliente-mes
+        # Exporting
         
          write.csv(df %>% select(Id_client, Date, ym,
           PD_reg, PD_logit, PD_rf, LGD_reg, LGD_use,
@@ -1027,13 +1037,14 @@ cat(sprintf("Logit AUC — Train: %.3f | Test: %.3f\n", auc_train, auc_test))
           "EL_by_client.csv", row.names = FALSE)
         
         
-        # 2) Resumen mensual (totales y ratios)
+        # 2) Monthly summary (totals and ratios)
         # ______________________________________________________________________________
         
         monthly_summary <- df %>%
           group_by(ym) %>%
           summarise(
-            # Totales EL
+            
+            # Totals EL
             EL_reg_principal   = sum(EL_reg_principal,   na.rm = TRUE),
             EL_logit_principal = sum(EL_logit_principal, na.rm = TRUE),
             EL_rf_principal    = sum(EL_rf_principal,    na.rm = TRUE),
@@ -1041,13 +1052,16 @@ cat(sprintf("Logit AUC — Train: %.3f | Test: %.3f\n", auc_train, auc_test))
             EL_logit_income    = sum(EL_logit_income,    na.rm = TRUE),
             EL_rf_income       = sum(EL_rf_income,       na.rm = TRUE),
             
-            # Totales EAD
+            # Totals EAD
+            
             EAD_principal = sum(EAD_principal, na.rm = TRUE),
             EAD_income    = sum(EAD_income,    na.rm = TRUE),
             .groups = "drop"
           ) %>%
           mutate(
+            
             # Ratios ELR (EL / EAD)
+            
             ELR_reg_principal   = EL_reg_principal   / EAD_principal,
             ELR_logit_principal = EL_logit_principal / EAD_principal,
             ELR_rf_principal    = EL_rf_principal    / EAD_principal,
@@ -1059,11 +1073,12 @@ cat(sprintf("Logit AUC — Train: %.3f | Test: %.3f\n", auc_train, auc_test))
         
         print(head(monthly_summary, 12))
         
-        #exportar resumen mensual
+        #Exporting
+        
         write.csv(monthly_summary, "EL_monthly_summary.csv", row.names = FALSE)
         
         
-        # 3) Resumen de portafolio (total y ratios finales)
+        # 3) Summary o portafolio (total and ratios finals)
         # ________________________________________________________________________________
         EL_portfolio <- tibble(
           Metric = c("EL_reg_principal","EL_logit_principal","EL_rf_principal",
@@ -1089,15 +1104,16 @@ cat(sprintf("Logit AUC — Train: %.3f | Test: %.3f\n", auc_train, auc_test))
         
         print(EL_portfolio)
         
-        # exportar resumen de portafolio
+        # exporting portfolio summary
          write.csv(EL_portfolio, "EL_portfolio_summary.csv", row.names = FALSE)
         
   
-        # 4)Gráficos de ELR mensual (principal)
+        # 4)Plots monthly ELR (principal)
         # ____________________________________________________________________________________
         
-        # Comparación Regulatorio vs Logit vs RF
-        ggplot(monthly_summary, aes(x = ym)) +
+        # Comparation Regulatory vs Logit vs RF
+        
+         ggplot(monthly_summary, aes(x = ym)) +
           geom_line(aes(y = ELR_reg_principal,   color = "Regulatorio")) +
           geom_point(aes(y = ELR_reg_principal,  color = "Regulatorio")) +
           geom_line(aes(y = ELR_logit_principal, color = "Logit")) +
@@ -1111,31 +1127,35 @@ cat(sprintf("Logit AUC — Train: %.3f | Test: %.3f\n", auc_train, auc_test))
         
         
         
-        
-        
 #################################################################################################
 #9. Unexpected Losses (UL) Dependencies
         
 
     #Function annualize
-        # _________________________________________________________________________________________
+    # _________________________________________________________________________________________
         
         
         to_prob <- function(x) { if (is.null(x)) return(NULL); if (any(x > 1, na.rm=TRUE)) x <- x/100; pmin(pmax(x,0),1) }
-        annualize_monthly_pd <- function(p_m) { p_m <- to_prob(p_m); 1 - (1 - p_m)^12 }  # ~constante en el año
-        # Mapa PD(1y) -> Rating (puedes ajustar cortes a tu apetito/regulador)
+        annualize_monthly_pd <- function(p_m) { p_m <- to_prob(p_m); 1 - (1 - p_m)^12 }  # ~constant on year
+        
+        
+        # Mapa PD(1y) -> Rating (this part is adjustable)
+        
         rating_from_pd1y <- function(p1y){
           p1y <- pmin(pmax(p1y, 0), 0.999999)
-          # AAA, AA, A, BBB, BB, B, CCC   (D solo como estado final)
+          # AAA, AA, A, BBB, BB, B, CCC   (D final state)
           breaks <- c(0, 0.0005, 0.0015, 0.005, 0.015, 0.05, 0.15, 1) # en prob
           labels <- c("AAA","AA","A","BBB","BB","B","CCC")
           cut(p1y, breaks=breaks, labels=labels, include.lowest=TRUE, right=TRUE)
         }
         
         # Dada una matriz de transición 1y (rows=start, cols=end), genera umbrales probit por fila
+        
         make_thresholds <- function(tmat, ratings){
           stopifnot(all(rownames(tmat)==ratings), all(colnames(tmat)==ratings))
-          # Para cada fila, usamos cumsum hasta la penúltima col; qnorm(1)=Inf lo manejamos con findInterval
+          
+          # Para cada fila, use cumsum hasta la penúltima col; qnorm(1)=Inf con findInterval
+          
           thr <- lapply(ratings, function(r){
             row <- as.numeric(tmat[r, ])
             cs  <- cumsum(row)
@@ -1152,7 +1172,7 @@ cat(sprintf("Logit AUC — Train: %.3f | Test: %.3f\n", auc_train, auc_test))
             r <- as.character(rating_start[i])
             thr <- thresholds[[r]]
             if (is.null(thr)) {
-              stop(sprintf("No hay umbrales para el rating inicial '%s'. Revisa nombres/levels.", r))
+              stop(sprintf("No existen umbrales para el rating inicial '%s'. Revisa nombres/levels.", r))
             }
             j <- findInterval(A[i], thr) + 1  # 1..K
             out[i] <- ratings_levels[j]
@@ -1160,12 +1180,16 @@ cat(sprintf("Logit AUC — Train: %.3f | Test: %.3f\n", auc_train, auc_test))
           factor(out, levels = ratings_levels)
         }
         
-        # 1) MATRIZ DE TRANSICIÓN 1-AÑO
+        # 1) MATRIX DE TRANSICIÓN 1-AÑO
         # ____________________________________________________________________________________
         
-        ratings <- c("AAA","AA","A","BBB","BB","B","CCC","D")
+        # This matrix is and example, the markov transition is more plausible taking
+        # underdevelop countries. In this case is a really healthy portfolio
         
-        tmat <- matrix(c(
+        
+          ratings <- c("AAA","AA","A","BBB","BB","B","CCC","D")
+        
+          tmat <- matrix(c(
           #   AAA     AA      A     BBB     BB      B     CCC     D
           0.92,  0.06,  0.01,  0.00,  0.00,  0.00,  0.00,  0.01,  # AAA
           0.02,  0.91,  0.05,  0.01,  0.00,  0.00,  0.00,  0.01,  # AA
@@ -1178,55 +1202,62 @@ cat(sprintf("Logit AUC — Train: %.3f | Test: %.3f\n", auc_train, auc_test))
         ), nrow=8, byrow=TRUE)
         rownames(tmat) <- ratings; colnames(tmat) <- ratings
         
-        # Chequeo
-        stopifnot(all(abs(rowSums(tmat)-1) < 1e-8))
+        # Checking
+          
+          stopifnot(all(abs(rowSums(tmat)-1) < 1e-8))
         
         # Umbrales probit por rating inicial
         thr_list <- make_thresholds(tmat, ratings)
         
         # SPREADS y DURACIONES por rating (para MTM no‑default)
-        # Spreads en DECIMAL (p.ej. 0.015 = 150 bps). Ajusta a tu curva real.
         # ___________________________________________________________________________
         
         spread_by_rating <- c(
           AAA = 0.005, AA = 0.007, A = 0.010, BBB = 0.015,
-          BB  = 0.025, B  = 0.040, CCC = 0.070, D = 1.00 # D no se usa en MTM
+          BB  = 0.025, B  = 0.040, CCC = 0.070, D = 1.00 # D don't use on MTM
         )
         duration_by_rating <- c(
           AAA = 4.5, AA = 4.5, A = 4.3, BBB = 4.0,
           BB  = 3.5, B  = 3.0, CCC = 2.0, D = 0.0
         )
         
-        #EXPOSICIONES: EAD y LGD por crédito + rating inicial desde PD
-        #    Puedes elegir qué PD mensual usar para mapear a rating: PD_Reg / PD_logit_month / PD_rf_month
+        #EAD and LGD by crédit + initial rating from PD
+        #    I use coalesce in dyplyr because I keep forgetting the names of my PD (not necessary): PD_Reg / PD_logit_month / PD_rf_month
         #_________________________________________________________________________________________
         
-        # Asegura EAD/LGD consistentes
+        # Check EAD/LGD consistentcy
+        
         df <- df %>%
           mutate(
             EAD_principal = pmax(dplyr::coalesce(EAD_principal, Capital, Loan_Amount_Local), 0),
             LGD_sim       = to_prob(dplyr::coalesce(LGD_pred_beta, LGD))
           )
         
-        # Elige la PD mensual para rating inicial (cambia aquí si quieres usar otra)
-        pd_month_for_rating <- to_prob(dplyr::coalesce(df$PD_logit_month,df$PD_Reg,df$PD_rf_month))
-        #First will take PD_logit
+        # Choose PD monthly for initial rating
         
-        # PD 1 año y rating inicial
+        pd_month_for_rating <- to_prob(dplyr::coalesce(df$PD_logit_month,df$PD_Reg,df$PD_rf_month))
+        #First I take PD_logit (is the best choice on this project until now)
+        
+        # PD 1 year and initial rating
+        
         pd_1y <- annualize_monthly_pd(pd_month_for_rating)
         rating_init <- rating_from_pd1y(pd_1y)
         
-        # Asegura sin NA y sin D como rating inicial
+        # No NA and without D as initial rating
+        
         rating_init <- addNA(rating_init)
         if (any(is.na(rating_init))) {
-          # Si algo quedó NA, mapeamos a BBB por defecto conservador
+          
+          #IF NA exist, goes to BBB by default
+          
           rating_init[is.na(rating_init)] <- factor("BBB", levels=levels(rating_init))
         }
         rating_init <- droplevels(rating_init)
         levels(rating_init) <- intersect(levels(rating_init), ratings)
         rating_init <- factor(as.character(rating_init), levels=ratings[ratings!="D"]) # sin D al inicio
         
-        # Exposición base para simulación
+        # Exposition for simulation
+        
         expo <- df %>%
           transmute(
             Id_client,
@@ -1238,13 +1269,14 @@ cat(sprintf("Logit AUC — Train: %.3f | Test: %.3f\n", auc_train, auc_test))
         
         stopifnot(nrow(expo) > 0)
         
-        # Asegura que todos los ratings iniciales existen en thresholds
-        missing_r <- setdiff(unique(as.character(expo$Rating0)), names(thr_list))
-        if (length(missing_r) > 0) {
-          stop(sprintf("Faltan umbrales para ratings iniciales: %s", paste(missing_r, collapse=", ")))
-        }
+        # make sure all initial ratings exist on the thresholds
         
-        # Asegura que los nombres en spread/duration cubren ratings
+          missing_r <- setdiff(unique(as.character(expo$Rating0)), names(thr_list))
+          if (length(missing_r) > 0) {
+          stop(sprintf("Faltan umbrales para ratings iniciales: %s", paste(missing_r, collapse=", ")))
+          }
+        
+        # Make sure names on spread/duration in ratings
         missing_s <- setdiff(unique(as.character(expo$Rating0)), names(spread_by_rating))
         missing_d <- setdiff(unique(as.character(expo$Rating0)), names(duration_by_rating))
         if (length(missing_s) > 0 || length(missing_d) > 0) {
@@ -1252,16 +1284,16 @@ cat(sprintf("Logit AUC — Train: %.3f | Test: %.3f\n", auc_train, auc_test))
                        paste(missing_s, collapse=", "), paste(missing_d, collapse=", ")))
         }
         
-        # Evita rating inicial "D"
+        # AVOID "D" RATING
         expo <- expo %>% filter(Rating0 %in% names(thr_list), Rating0 != "D")
         stopifnot(nrow(expo) > 0)
         
         
-        # 4) SIMULACIÓN con factor gaussiano (correlación entre emisores)
+        #SIMULATION WITh gaussian factor (crosssectors)
         #_________________________________________________________________________________
 
         simulate_losses <- function(expo,
-                                    n_sims      = 100,
+                                    n_sims      = 100, #Choose 100 for simplicity on simulation
                                     rho         = 0.15,
                                     ratings_lvls,
                                     thr_list_in,
@@ -1271,11 +1303,13 @@ cat(sprintf("Logit AUC — Train: %.3f | Test: %.3f\n", auc_train, auc_test))
           
           n <- nrow(expo)
           
-          # Índices útiles según rating inicial
+          # Useful index about initial rating
+          
           spread_start <- spread_tbl[as.character(expo$Rating0)]
           dur_start    <- duration_tbl[as.character(expo$Rating0)]
           
-          # Pre-chequeos
+          # Pre-checking
+          
           if (any(is.na(spread_start)) || any(is.na(dur_start))) {
             stop("Faltan spreads/durations para algunos ratings iniciales.")
           }
@@ -1283,57 +1317,61 @@ cat(sprintf("Logit AUC — Train: %.3f | Test: %.3f\n", auc_train, auc_test))
           port_losses <- numeric(n_sims)
           
           for (s in seq_len(n_sims)) {
-            # 1) factor común + idios
+            #common factor + idios
+            
             Z  <- rnorm(1)
             ei <- rnorm(n)
             A  <- sqrt(rho)*Z + sqrt(1 - rho)*ei   # shock con correlación
             
-            # 2) rating final por umbrales (usa argumentos *_in / *_lvls)
+            #final rating by thresholds (use arguments *_in / *_lvls)
+            
             rating_end <- apply_transition(A, expo$Rating0, thr_list_in, ratings_lvls)
             
-            # 3) pérdidas
+            # Losses__________________________________________________________________________
+            
             spread_end <- spread_tbl[as.character(rating_end)]
             is_default <- (rating_end == "D")
             
-            # MTM para no default
+            # MTM for no default
+            
             ds <- (spread_end - spread_start)      # Δspread
             mtm_loss <- dur_start * ds * expo$EAD
             if (!keep_gains) mtm_loss <- pmax(mtm_loss, 0)  # solo pérdidas (opcional)
             
             # Default
+            
             def_loss <- ifelse(is_default, expo$LGD * expo$EAD, 0)
             
-            # Pérdida por crédito
+            # losses each credit
+            
             loss_i <- ifelse(is_default, def_loss, mtm_loss)
             
-            # Pérdida de portafolio
+            # losses portfolio
             port_losses[s] <- sum(loss_i, na.rm = TRUE)
-          }
+            }
           
-          port_losses
-        }
+            port_losses
+            }
+        
+          # Parámeters of the simulation
+        
+          set.seed(1999)
+          N_SIM <- 100 # Again I choose 100 for simplicity
+          RHO   <- 0.20      # asset correlation
+        
+          losses <- simulate_losses(
+            expo,
+            n_sims      = N_SIM,
+            rho         = RHO,
+            ratings_lvls= ratings,
+            thr_list_in = thr_list,
+            spread_tbl  = spread_by_rating,
+            duration_tbl= duration_by_rating,
+            keep_gains  = FALSE   # TRUE if see gains
+          )
         
         
-        
-        
-        # Parámetros de simulación (ajústalos)
-        set.seed(1999)
-        N_SIM <- 100
-        RHO   <- 0.20      # correlación de activos (típico 10%–25%)
-        
-        losses <- simulate_losses(
-          expo,
-          n_sims      = N_SIM,
-          rho         = RHO,
-          ratings_lvls= ratings,
-          thr_list_in = thr_list,
-          spread_tbl  = spread_by_rating,
-          duration_tbl= duration_by_rating,
-          keep_gains  = FALSE   # pon TRUE si quieres permitir ganancias (spreads bajan)
-        )
-        
-        
-        # 5) Métricas: EL(sim), VaR, UL, ECAP
+        # EL(sim), VaR, Unexpected Losses, ECAP
         #_________________________________________________________________________________
         
         
@@ -1348,10 +1386,12 @@ cat(sprintf("Logit AUC — Train: %.3f | Test: %.3f\n", auc_train, auc_test))
         cat(sprintf("UL (99.9%%) : %.2f\n", UL_999))
         cat(sprintf("ECap 99.9%% : %.2f\n", ECAP_999))
         
-        # guardar distribución
-         write.csv(data.frame(loss=losses), "UL_losses_distribution.csv", row.names=FALSE)
+        # Export distribution
+         
+        write.csv(data.frame(loss=losses), "UL_losses_distribution.csv", row.names=FALSE)
         
-        # gráfico rápido (requiere ggplot2)
+        # Plotting
+        
         if (requireNamespace("ggplot2", quietly = TRUE)) {
           library(ggplot2)
           ggplot(data.frame(loss=losses), aes(x=loss)) +
@@ -1362,4 +1402,6 @@ cat(sprintf("Logit AUC — Train: %.3f | Test: %.3f\n", auc_train, auc_test))
                  x="Pérdida de portafolio", y="Frecuencia") +
             theme_minimal()
         }
+        
+        
         
